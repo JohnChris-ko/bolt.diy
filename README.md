@@ -106,6 +106,17 @@ project, please check the [project management guide](./PROJECT.md) to get starte
 - **Integration-ready Docker support** for a hassle-free setup.
 - **Deploy** directly to **Netlify**
 
+## Architecture
+
+This version of bolt.diy has been refactored to use a local Docker-based environment instead of the proprietary WebContainer API. This change makes the project fully open-source and removes the need for a commercial license.
+
+The new architecture consists of:
+- A **frontend** application running in the browser.
+- A **Node.js backend server** that manages Docker containers.
+- **Docker containers** that provide an isolated environment for running user code, terminals, and previews.
+
+This means that you need to have Docker installed and running on your machine to use this application.
+
 ## Setup
 
 If you're new to installing software from GitHub, don't worry! If you encounter any issues, feel free to submit an "issue" using the provided links or improve this documentation by forking the repository, editing the instructions, and submitting a pull request. The following instruction will help you get the stable branch up and running on your local machine in no time.
@@ -120,9 +131,9 @@ Let's get you up and running with the stable version of Bolt.DIY!
 
 ## Prerequisites
 
-Before you begin, you'll need to install two important pieces of software:
+Before you begin, you'll need to install a few important pieces of software:
 
-### Install Node.js
+### 1. Install Node.js
 
 Node.js is required to run the application.
 
@@ -143,11 +154,15 @@ Node.js is required to run the application.
         ```
      3. Look for `/usr/local/bin` in the output
 
+### 2. Install Docker
+
+Docker is required to run the application in an isolated environment.
+
+1. Visit the [Docker Download Page](https://www.docker.com/products/docker-desktop)
+2. Download and install Docker Desktop for your operating system.
+3. Make sure the Docker daemon is running. You can check this by running `docker --version` in your terminal.
+
 ## Running the Application
-
-You have two options for running Bolt.DIY: directly on your machine or using Docker.
-
-### Option 1: Direct Installation (Recommended for Beginners)
 
 1. **Install Package Manager (pnpm)**:
 
@@ -166,31 +181,8 @@ You have two options for running Bolt.DIY: directly on your machine or using Doc
    ```bash
    pnpm run dev
    ```
-   
-### Option 2: Using Docker
 
-This option requires some familiarity with Docker but provides a more isolated environment.
-
-#### Additional Prerequisite
-
-- Install Docker: [Download Docker](https://www.docker.com/)
-
-#### Steps:
-
-1. **Build the Docker Image**:
-
-   ```bash
-   # Using npm script:
-   npm run dockerbuild
-
-   # OR using direct Docker command:
-   docker build . --target bolt-ai-development
-   ```
-
-2. **Run the Container**:
-   ```bash
-   docker compose --profile development up
-   ```
+   This will start the frontend application on `http://localhost:5173` and the backend server on port 4000. The application will automatically connect to the backend.
 
 ## Configuring API Keys and Providers
 
@@ -362,7 +354,3 @@ Explore upcoming features and priorities on our [Roadmap](https://roadmap.sh/r/o
 For answers to common questions, issues, and to see a list of recommended models, visit our [FAQ Page](FAQ.md).
 
 
-# Licensing
-**Who needs a commercial WebContainer API license?**
-
-bolt.diy source code is distributed as MIT, but it uses WebContainers API that [requires licensing](https://webcontainers.io/enterprise) for production usage in a commercial, for-profit setting. (Prototypes or POCs do not require a commercial license.) If you're using the API to meet the needs of your customers, prospective customers, and/or employees, you need a license to ensure compliance with our Terms of Service. Usage of the API in violation of these terms may result in your access being revoked.

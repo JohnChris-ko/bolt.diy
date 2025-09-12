@@ -505,6 +505,7 @@ export class WorkbenchStore {
 
           this.deployAlert.set(alert);
         },
+        () => this.#previewsStore.startPolling(),
       ),
     });
   }

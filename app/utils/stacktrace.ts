@@ -4,13 +4,13 @@
 export function cleanStackTrace(stackTrace: string): string {
   // Function to clean a single URL
   const cleanUrl = (url: string): string => {
-    const regex = /^https?:\/\/[^\/]+\.webcontainer-api\.io(\/.*)?$/;
+    const regex = /^https?:\/\/localhost:\d+(\/.*)?$/;
 
     if (!regex.test(url)) {
       return url;
     }
 
-    const pathRegex = /^https?:\/\/[^\/]+\.webcontainer-api\.io\/(.*?)$/;
+    const pathRegex = /^https?:\/\/localhost:\d+\/(.*?)$/;
     const match = url.match(pathRegex);
 
     return match?.[1] || '';
@@ -20,8 +20,8 @@ export function cleanStackTrace(stackTrace: string): string {
   return stackTrace
     .split('\n')
     .map((line) => {
-      // Match any URL in the line that contains webcontainer-api.io
-      return line.replace(/(https?:\/\/[^\/]+\.webcontainer-api\.io\/[^\s\)]+)/g, (match) => cleanUrl(match));
+      // Match any URL in the line that contains localhost with a port
+      return line.replace(/(https?:\/\/localhost:\d+\/[^\s\)]+)/g, (match) => cleanUrl(match));
     })
     .join('\n');
 }
