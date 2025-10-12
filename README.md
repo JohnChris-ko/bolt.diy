@@ -170,28 +170,53 @@ Node.js is required to run the application.
 
 ## Running the Application
 
-You have two options for running Bolt.DIY: directly on your machine or using Docker.
+**IMPORTANT**: The new architecture runs **two servers**:
+1. **Frontend server** (React/Vite) on port 5173
+2. **Backend server** (Node.js + Docker) on port 4000
 
-### Option 1: Direct Installation (Recommended for Beginners)
+The `pnpm run dev` command automatically starts both servers concurrently.
 
-1. **Install Package Manager (pnpm)**:
+### Option 1: Direct Installation (Recommended)
+
+1. **Ensure Docker is Running**:
+   - Open Docker Desktop and make sure it's running
+   - Verify with: `docker ps`
+
+2. **Install Package Manager (pnpm)**:
 
    ```bash
    npm install -g pnpm
    ```
 
-2. **Install Project Dependencies**:
+3. **Install Project Dependencies**:
 
    ```bash
    pnpm install
    ```
 
-3. **Start the Application**:
+   This will install dependencies for both the frontend and backend.
+
+4. **Copy Environment Files**:
+
+   ```bash
+   cp server/.env.example server/.env
+   cp app/.env.local.example app/.env.local
+   ```
+
+5. **Start the Application**:
 
    ```bash
    pnpm run dev
    ```
-   
+
+   This command starts both the frontend and backend servers. You should see:
+   - Backend server running on http://localhost:4000
+   - Frontend server running on http://localhost:5173
+
+6. **Access the Application**:
+   - Open your browser to http://localhost:5173
+   - The frontend will automatically connect to the backend
+
 ### Option 2: Using Docker
 
 This option requires some familiarity with Docker but provides a more isolated environment.
