@@ -20,24 +20,58 @@ export class TerminalStore {
   toggleTerminal(value?: boolean) {
     this.showTerminal.set(value !== undefined ? value : !this.showTerminal.get());
   }
+
   async attachBoltTerminal(terminal: ITerminal) {
     try {
-      const wc = await dockerRuntime;
-      await this.#boltTerminal.init(wc, terminal);
+      const ws = dockerRuntime.createTerminalWebSocket(this.#sessionId);
+
+      ws.onopen = () => {
+        terminal.write(coloredText.green('Terminal connected\n\n'));
+        // Send resize if terminal has dimensions
+        if (terminal.cols && terminal.rows) {
+          ws.send(JSON.stringify({ type: 'resize', cols: terminal.cols, rows: terminal.rows }));
+        }
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          if (message.type === 'output') {
+            terminal.write(message.data);
+          } else if (message.type === 'error') {
+            terminal.write(coloredText.red(`Error: ${message.data}\n`));
+          }
+        } catch (error) {
+          console.error('Failed to parse terminal message:', error);
+        }
+      };
+
+      ws.onclose = () => {
+        terminal.write(coloredText.yellow('\n\nTerminal disconnected\n'));
+      };
+
+      ws.onerror = (error) => {
+        terminal.write(coloredText.red('Terminal connection error\n'));
+        console.error('Terminal WebSocket error:', error);
+      };
+
+      // Listen to terminal input
+      terminal.onData((data: string) => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'input', data }));
+        }
+      });
+
+      this.#websockets.set(terminal, ws);
     } catch (error: any) {
-      terminal.write(coloredText.red('Failed to spawn bolt shell\n\n') + error.message);
+      terminal.write(coloredText.red('Failed to connect terminal\n\n') + error.message);
       return;
     }
   }
 
   async attachTerminal(terminal: ITerminal) {
-    try {
-      const shellProcess = await newShellProcess(await dockerRuntime, terminal);
-      this.#terminals.push({ terminal, process: shellProcess });
-    } catch (error: any) {
-      terminal.write(coloredText.red('Failed to spawn shell\n\n') + error.message);
-      return;
-    }
+    // Same implementation as attachBoltTerminal
+    await this.attachBoltTerminal(terminal);
   }
 
   onTerminalResize(cols: number, rows: number) {
