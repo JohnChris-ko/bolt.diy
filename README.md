@@ -120,7 +120,32 @@ Let's get you up and running with the stable version of Bolt.DIY!
 
 ## Prerequisites
 
-Before you begin, you'll need to install two important pieces of software:
+**IMPORTANT: bolt.diy now uses a Docker-based runtime instead of WebContainer**
+
+This version of bolt.diy has been modified to use an **open-source Docker-based backend** instead of the proprietary WebContainer API. This means:
+
+- **Docker is required** to run the application
+- The frontend (React/Vite) communicates with a Node.js backend
+- The backend manages Docker containers for code execution
+- Each project runs in its own isolated Docker container
+
+### Install Docker
+
+Docker is **required** to run bolt.diy with the new open-source runtime.
+
+1. Visit the [Docker Download Page](https://www.docker.com/get-started)
+2. Download Docker Desktop for your operating system (Windows, Mac, or Linux)
+3. Install Docker Desktop and ensure it's running
+4. Verify Docker is installed:
+   ```bash
+   docker --version
+   docker ps
+   ```
+5. **Linux users**: Ensure your user has Docker permissions:
+   ```bash
+   sudo usermod -aG docker $USER
+   ```
+   Then log out and log back in for the changes to take effect.
 
 ### Install Node.js
 
