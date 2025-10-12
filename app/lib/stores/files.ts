@@ -849,16 +849,14 @@ export class FilesStore {
   }
 
   async createFolder(folderPath: string) {
-    const webcontainer = await dockerRuntime;
-
     try {
-      const relativePath = path.relative(webcontainer.workdir, folderPath);
+      const relativePath = path.relative('/project', folderPath);
 
       if (!relativePath) {
         throw new Error(`EINVAL: invalid folder path, create '${relativePath}'`);
       }
 
-      await webcontainer.fs.mkdir(relativePath, { recursive: true });
+      await dockerRuntime.mkdir(this.#sessionId, folderPath, true);
 
       this.files.setKey(folderPath, { type: 'folder' });
 
