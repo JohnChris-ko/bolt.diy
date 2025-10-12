@@ -50,13 +50,6 @@ export function useGit() {
 
       fileData.current = {};
 
-      let branch: string | undefined;
-      let baseUrl = url;
-
-      if (url.includes('#')) {
-        [baseUrl, branch] = url.split('#');
-      }
-
       /*
        * Skip Git initialization for now - let isomorphic-git handle it
        * This avoids potential issues with our manual initialization
@@ -85,24 +78,23 @@ export function useGit() {
           fs,
           http,
           dir: webcontainer.workdir,
-          url: baseUrl,
+          url,
           depth: 1,
           singleBranch: true,
-          ref: branch,
           corsProxy: '/api/git-proxy',
           headers,
           onProgress: (event) => {
             console.log('Git clone progress:', event);
           },
-          onAuth: (baseUrl) => {
-            let auth = lookupSavedPassword(baseUrl);
+          onAuth: (url) => {
+            let auth = lookupSavedPassword(url);
 
             if (auth) {
-              console.log('Using saved authentication for', baseUrl);
+              console.log('Using saved authentication for', url);
               return auth;
             }
 
-            console.log('Repository requires authentication:', baseUrl);
+            console.log('Repository requires authentication:', url);
 
             if (confirm('This repository requires authentication. Would you like to enter your GitHub credentials?')) {
               auth = {
@@ -114,18 +106,16 @@ export function useGit() {
               return { cancel: true };
             }
           },
-          onAuthFailure: (baseUrl, _auth) => {
-            console.error(`Authentication failed for ${baseUrl}`);
-            toast.error(
-              `Authentication failed for ${baseUrl.split('/')[2]}. Please check your credentials and try again.`,
-            );
+          onAuthFailure: (url, _auth) => {
+            console.error(`Authentication failed for ${url}`);
+            toast.error(`Authentication failed for ${url.split('/')[2]}. Please check your credentials and try again.`);
             throw new Error(
-              `Authentication failed for ${baseUrl.split('/')[2]}. Please check your credentials and try again.`,
+              `Authentication failed for ${url.split('/')[2]}. Please check your credentials and try again.`,
             );
           },
-          onAuthSuccess: (baseUrl, auth) => {
-            console.log(`Authentication successful for ${baseUrl}`);
-            saveGitAuth(baseUrl, auth);
+          onAuthSuccess: (url, auth) => {
+            console.log(`Authentication successful for ${url}`);
+            saveGitAuth(url, auth);
           },
         });
 

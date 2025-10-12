@@ -34,17 +34,12 @@ export const Markdown = memo(
 
           if (className?.includes('__boltArtifact__')) {
             const messageId = node?.properties.dataMessageId as string;
-            const artifactId = node?.properties.dataArtifactId as string;
 
             if (!messageId) {
               logger.error(`Invalid message id ${messageId}`);
             }
 
-            if (!artifactId) {
-              logger.error(`Invalid artifact id ${artifactId}`);
-            }
-
-            return <Artifact messageId={messageId} artifactId={artifactId} />;
+            return <Artifact messageId={messageId} />;
           }
 
           if (className?.includes('__boltSelectedElement__')) {
