@@ -1,25 +1,20 @@
-import type { WebContainer, WebContainerProcess } from '@webcontainer/api';
 import { atom, type WritableAtom } from 'nanostores';
 import type { ITerminal } from '~/types/terminal';
-import { newBoltShellProcess, newShellProcess } from '~/utils/shell';
 import { coloredText } from '~/utils/terminal';
+import { dockerRuntime } from '~/lib/runtime/docker-runtime';
 
 export class TerminalStore {
-  #webcontainer: Promise<WebContainer>;
-  #terminals: Array<{ terminal: ITerminal; process: WebContainerProcess }> = [];
-  #boltTerminal = newBoltShellProcess();
+  #sessionId: string;
+  #websockets: Map<ITerminal, WebSocket> = new Map();
 
   showTerminal: WritableAtom<boolean> = import.meta.hot?.data.showTerminal ?? atom(true);
 
-  constructor(webcontainerPromise: Promise<WebContainer>) {
-    this.#webcontainer = webcontainerPromise;
+  constructor(sessionId: string) {
+    this.#sessionId = sessionId;
 
     if (import.meta.hot) {
       import.meta.hot.data.showTerminal = this.showTerminal;
     }
-  }
-  get boltTerminal() {
-    return this.#boltTerminal;
   }
 
   toggleTerminal(value?: boolean) {
@@ -27,7 +22,7 @@ export class TerminalStore {
   }
   async attachBoltTerminal(terminal: ITerminal) {
     try {
-      const wc = await this.#webcontainer;
+      const wc = await dockerRuntime;
       await this.#boltTerminal.init(wc, terminal);
     } catch (error: any) {
       terminal.write(coloredText.red('Failed to spawn bolt shell\n\n') + error.message);
@@ -37,7 +32,7 @@ export class TerminalStore {
 
   async attachTerminal(terminal: ITerminal) {
     try {
-      const shellProcess = await newShellProcess(await this.#webcontainer, terminal);
+      const shellProcess = await newShellProcess(await dockerRuntime, terminal);
       this.#terminals.push({ terminal, process: shellProcess });
     } catch (error: any) {
       terminal.write(coloredText.red('Failed to spawn shell\n\n') + error.message);
