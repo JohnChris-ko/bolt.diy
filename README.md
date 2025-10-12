@@ -381,6 +381,47 @@ Remember to always commit your local changes or stash them before pulling update
 
 ---
 
+## Troubleshooting
+
+### Docker-Related Issues
+
+**Docker permission denied (Linux)**
+If you see "permission denied" errors when running Docker commands:
+```bash
+sudo usermod -aG docker $USER
+```
+Then log out and log back in.
+
+**Port already in use**
+If port 4000 (backend) or 5173 (frontend) is already in use:
+- Change `SERVER_PORT` in `server/.env`
+- Change `VITE_PORT` in `app/.env.local`
+
+**Container won't stop**
+If containers don't stop properly:
+```bash
+docker ps
+docker rm -f <container_id>
+```
+
+**Backend not connecting**
+Make sure both servers are running:
+- Check that `pnpm run dev` started both frontend and backend
+- Verify Docker is running: `docker ps`
+- Check backend logs for errors
+
+**Docker image pull fails**
+The backend uses `node:20-alpine` by default. If it fails to pull:
+- Check your internet connection
+- Try manually pulling: `docker pull node:20-alpine`
+- Or change `DEFAULT_CONTAINER_IMAGE` in `server/.env`
+
+### General Issues
+
+For more troubleshooting help, visit our [FAQ Page](FAQ.md) or join our community.
+
+---
+
 ## Available Scripts
 
 - **`pnpm run dev`**: Starts the development server.
