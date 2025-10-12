@@ -75,23 +75,25 @@ export class TerminalStore {
   }
 
   onTerminalResize(cols: number, rows: number) {
-    for (const { process } of this.#terminals) {
-      process.resize({ cols, rows });
+    for (const [terminal, ws] of this.#websockets.entries()) {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'resize', cols, rows }));
+      }
     }
   }
 
   async detachTerminal(terminal: ITerminal) {
-    const terminalIndex = this.#terminals.findIndex((t) => t.terminal === terminal);
+    const ws = this.#websockets.get(terminal);
 
-    if (terminalIndex !== -1) {
-      const { process } = this.#terminals[terminalIndex];
-
+    if (ws) {
       try {
-        process.kill();
+        if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+          ws.close();
+        }
       } catch (error) {
-        console.warn('Failed to kill terminal process:', error);
+        console.warn('Failed to close terminal WebSocket:', error);
       }
-      this.#terminals.splice(terminalIndex, 1);
+      this.#websockets.delete(terminal);
     }
   }
 }
