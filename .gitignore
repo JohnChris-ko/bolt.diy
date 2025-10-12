@@ -33,6 +33,11 @@ functions/build/
 .wrangler
 _worker.bundle
 
+# Server (backend) ignores
+server/.env
+server/dist/
+server/node_modules/
+
 Modelfile
 modelfiles
 

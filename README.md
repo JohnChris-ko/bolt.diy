@@ -120,7 +120,32 @@ Let's get you up and running with the stable version of Bolt.DIY!
 
 ## Prerequisites
 
-Before you begin, you'll need to install two important pieces of software:
+**IMPORTANT: bolt.diy now uses a Docker-based runtime instead of WebContainer**
+
+This version of bolt.diy has been modified to use an **open-source Docker-based backend** instead of the proprietary WebContainer API. This means:
+
+- **Docker is required** to run the application
+- The frontend (React/Vite) communicates with a Node.js backend
+- The backend manages Docker containers for code execution
+- Each project runs in its own isolated Docker container
+
+### Install Docker
+
+Docker is **required** to run bolt.diy with the new open-source runtime.
+
+1. Visit the [Docker Download Page](https://www.docker.com/get-started)
+2. Download Docker Desktop for your operating system (Windows, Mac, or Linux)
+3. Install Docker Desktop and ensure it's running
+4. Verify Docker is installed:
+   ```bash
+   docker --version
+   docker ps
+   ```
+5. **Linux users**: Ensure your user has Docker permissions:
+   ```bash
+   sudo usermod -aG docker $USER
+   ```
+   Then log out and log back in for the changes to take effect.
 
 ### Install Node.js
 
@@ -145,28 +170,53 @@ Node.js is required to run the application.
 
 ## Running the Application
 
-You have two options for running Bolt.DIY: directly on your machine or using Docker.
+**IMPORTANT**: The new architecture runs **two servers**:
+1. **Frontend server** (React/Vite) on port 5173
+2. **Backend server** (Node.js + Docker) on port 4000
 
-### Option 1: Direct Installation (Recommended for Beginners)
+The `pnpm run dev` command automatically starts both servers concurrently.
 
-1. **Install Package Manager (pnpm)**:
+### Option 1: Direct Installation (Recommended)
+
+1. **Ensure Docker is Running**:
+   - Open Docker Desktop and make sure it's running
+   - Verify with: `docker ps`
+
+2. **Install Package Manager (pnpm)**:
 
    ```bash
    npm install -g pnpm
    ```
 
-2. **Install Project Dependencies**:
+3. **Install Project Dependencies**:
 
    ```bash
    pnpm install
    ```
 
-3. **Start the Application**:
+   This will install dependencies for both the frontend and backend.
+
+4. **Copy Environment Files**:
+
+   ```bash
+   cp server/.env.example server/.env
+   cp app/.env.local.example app/.env.local
+   ```
+
+5. **Start the Application**:
 
    ```bash
    pnpm run dev
    ```
-   
+
+   This command starts both the frontend and backend servers. You should see:
+   - Backend server running on http://localhost:4000
+   - Frontend server running on http://localhost:5173
+
+6. **Access the Application**:
+   - Open your browser to http://localhost:5173
+   - The frontend will automatically connect to the backend
+
 ### Option 2: Using Docker
 
 This option requires some familiarity with Docker but provides a more isolated environment.
@@ -331,6 +381,47 @@ Remember to always commit your local changes or stash them before pulling update
 
 ---
 
+## Troubleshooting
+
+### Docker-Related Issues
+
+**Docker permission denied (Linux)**
+If you see "permission denied" errors when running Docker commands:
+```bash
+sudo usermod -aG docker $USER
+```
+Then log out and log back in.
+
+**Port already in use**
+If port 4000 (backend) or 5173 (frontend) is already in use:
+- Change `SERVER_PORT` in `server/.env`
+- Change `VITE_PORT` in `app/.env.local`
+
+**Container won't stop**
+If containers don't stop properly:
+```bash
+docker ps
+docker rm -f <container_id>
+```
+
+**Backend not connecting**
+Make sure both servers are running:
+- Check that `pnpm run dev` started both frontend and backend
+- Verify Docker is running: `docker ps`
+- Check backend logs for errors
+
+**Docker image pull fails**
+The backend uses `node:20-alpine` by default. If it fails to pull:
+- Check your internet connection
+- Try manually pulling: `docker pull node:20-alpine`
+- Or change `DEFAULT_CONTAINER_IMAGE` in `server/.env`
+
+### General Issues
+
+For more troubleshooting help, visit our [FAQ Page](FAQ.md) or join our community.
+
+---
+
 ## Available Scripts
 
 - **`pnpm run dev`**: Starts the development server.
@@ -363,6 +454,20 @@ For answers to common questions, issues, and to see a list of recommended models
 
 
 # Licensing
-**Who needs a commercial WebContainer API license?**
 
-bolt.diy source code is distributed as MIT, but it uses WebContainers API that [requires licensing](https://webcontainers.io/enterprise) for production usage in a commercial, for-profit setting. (Prototypes or POCs do not require a commercial license.) If you're using the API to meet the needs of your customers, prospective customers, and/or employees, you need a license to ensure compliance with our Terms of Service. Usage of the API in violation of these terms may result in your access being revoked.
+**Open Source Runtime**
+
+This version of bolt.diy has been modified to use an **open-source Docker-based runtime** instead of the proprietary WebContainer API. This means:
+
+- **No WebContainer license required** for commercial use
+- All runtime components are open source (Docker, Node.js)
+- The bolt.diy source code remains MIT licensed
+- You can use this for commercial projects without additional licensing
+
+**Original WebContainer Licensing (for reference)**
+
+The original bolt.diy used WebContainers API which [required licensing](https://webcontainers.io/enterprise) for production usage in a commercial, for-profit setting. This modified version removes that dependency entirely.
+
+**MIT License**
+
+This modified version is distributed under the MIT license. See the LICENSE file for details.
