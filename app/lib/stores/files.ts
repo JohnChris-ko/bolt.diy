@@ -1,4 +1,4 @@
-import type { PathWatcherEvent, WebContainer } from '@webcontainer/api';
+import type { PathWatcherEvent } from '@webcontainer/api';
 import { getEncoding } from 'istextorbinary';
 import { map, type MapStore } from 'nanostores';
 import { Buffer } from 'node:buffer';
@@ -21,6 +21,7 @@ import {
   clearCache,
 } from '~/lib/persistence/lockedFiles';
 import { getCurrentChatId } from '~/utils/fileLocks';
+import { dockerRuntime } from '~/lib/runtime/docker-runtime';
 
 const logger = createScopedLogger('FilesStore');
 
@@ -45,7 +46,7 @@ type Dirent = File | Folder;
 export type FileMap = Record<string, Dirent | undefined>;
 
 export class FilesStore {
-  #webcontainer: Promise<WebContainer>;
+  #sessionId: string;
 
   /**
    * Tracks the number of files without folders.
@@ -73,8 +74,8 @@ export class FilesStore {
     return this.#size;
   }
 
-  constructor(webcontainerPromise: Promise<WebContainer>) {
-    this.#webcontainer = webcontainerPromise;
+  constructor(sessionId: string) {
+    this.#sessionId = sessionId;
 
     // Load deleted paths from localStorage if available
     try {
@@ -548,7 +549,7 @@ export class FilesStore {
   }
 
   async saveFile(filePath: string, content: string) {
-    const webcontainer = await this.#webcontainer;
+    const webcontainer = await dockerRuntime;
 
     try {
       const relativePath = path.relative(webcontainer.workdir, filePath);
@@ -590,7 +591,7 @@ export class FilesStore {
   }
 
   async #init() {
-    const webcontainer = await this.#webcontainer;
+    const webcontainer = await dockerRuntime;
 
     // Clean up any files that were previously deleted
     this.#cleanupDeletedFiles();
@@ -768,7 +769,7 @@ export class FilesStore {
   }
 
   async createFile(filePath: string, content: string | Uint8Array = '') {
-    const webcontainer = await this.#webcontainer;
+    const webcontainer = await dockerRuntime;
 
     try {
       const relativePath = path.relative(webcontainer.workdir, filePath);
@@ -821,7 +822,7 @@ export class FilesStore {
   }
 
   async createFolder(folderPath: string) {
-    const webcontainer = await this.#webcontainer;
+    const webcontainer = await dockerRuntime;
 
     try {
       const relativePath = path.relative(webcontainer.workdir, folderPath);
@@ -844,7 +845,7 @@ export class FilesStore {
   }
 
   async deleteFile(filePath: string) {
-    const webcontainer = await this.#webcontainer;
+    const webcontainer = await dockerRuntime;
 
     try {
       const relativePath = path.relative(webcontainer.workdir, filePath);
@@ -876,7 +877,7 @@ export class FilesStore {
   }
 
   async deleteFolder(folderPath: string) {
-    const webcontainer = await this.#webcontainer;
+    const webcontainer = await dockerRuntime;
 
     try {
       const relativePath = path.relative(webcontainer.workdir, folderPath);
