@@ -141,45 +141,48 @@ export class PreviewsStore {
   }
 
   async #init() {
-    const webcontainer = await dockerRuntime;
+    // Set up polling for preview detection (replacing WebContainer events)
+    this.#pollInterval = setInterval(async () => {
+      try {
+        const portInfos = await dockerRuntime.getPreviewUrls(this.#sessionId);
+        
+        // Compare with current previews
+        const currentPreviews = this.previews.get();
+        const currentPorts = new Set(currentPreviews.map(p => p.port));
+        const newPorts = new Set(portInfos.map(p => p.port));
 
-    // Listen for server ready events
-    webcontainer.on('server-ready', (port, url) => {
-      console.log('[Preview] Server ready on port:', port, url);
-      this.broadcastUpdate(url);
+        // Find new previews
+        for (const portInfo of portInfos) {
+          if (!currentPorts.has(portInfo.port)) {
+            const previewInfo: PreviewInfo = {
+              port: portInfo.port,
+              ready: true,
+              baseUrl: portInfo.proxyUrl,
+            };
+            this.#availablePreviews.set(portInfo.port, previewInfo);
+            currentPreviews.push(previewInfo);
+            console.log('[Preview] New server detected on port:', portInfo.port);
+            this.broadcastUpdate(portInfo.proxyUrl);
+            this._broadcastStorageSync();
+          }
+        }
 
-      // Initial storage sync when preview is ready
-      this._broadcastStorageSync();
-    });
+        // Find closed previews
+        for (const preview of currentPreviews) {
+          if (!newPorts.has(preview.port)) {
+            this.#availablePreviews.delete(preview.port);
+          }
+        }
 
-    // Listen for port events
-    webcontainer.on('port', (port, type, url) => {
-      let previewInfo = this.#availablePreviews.get(port);
-
-      if (type === 'close' && previewInfo) {
-        this.#availablePreviews.delete(port);
-        this.previews.set(this.previews.get().filter((preview) => preview.port !== port));
-
-        return;
+        // Update previews atom if changes detected
+        const updatedPreviews = currentPreviews.filter(p => newPorts.has(p.port));
+        if (updatedPreviews.length !== currentPreviews.length) {
+          this.previews.set(updatedPreviews);
+        }
+      } catch (error) {
+        console.error('[Preview] Polling failed:', error);
       }
-
-      const previews = this.previews.get();
-
-      if (!previewInfo) {
-        previewInfo = { port, ready: type === 'open', baseUrl: url };
-        this.#availablePreviews.set(port, previewInfo);
-        previews.push(previewInfo);
-      }
-
-      previewInfo.ready = type === 'open';
-      previewInfo.baseUrl = url;
-
-      this.previews.set([...previews]);
-
-      if (type === 'open') {
-        this.broadcastUpdate(url);
-      }
-    });
+    }, 3000); // Poll every 3 seconds
   }
 
   // Helper to extract preview ID from URL
