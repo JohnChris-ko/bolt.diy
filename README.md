@@ -454,6 +454,20 @@ For answers to common questions, issues, and to see a list of recommended models
 
 
 # Licensing
-**Who needs a commercial WebContainer API license?**
 
-bolt.diy source code is distributed as MIT, but it uses WebContainers API that [requires licensing](https://webcontainers.io/enterprise) for production usage in a commercial, for-profit setting. (Prototypes or POCs do not require a commercial license.) If you're using the API to meet the needs of your customers, prospective customers, and/or employees, you need a license to ensure compliance with our Terms of Service. Usage of the API in violation of these terms may result in your access being revoked.
+**Open Source Runtime**
+
+This version of bolt.diy has been modified to use an **open-source Docker-based runtime** instead of the proprietary WebContainer API. This means:
+
+- **No WebContainer license required** for commercial use
+- All runtime components are open source (Docker, Node.js)
+- The bolt.diy source code remains MIT licensed
+- You can use this for commercial projects without additional licensing
+
+**Original WebContainer Licensing (for reference)**
+
+The original bolt.diy used WebContainers API which [required licensing](https://webcontainers.io/enterprise) for production usage in a commercial, for-profit setting. This modified version removes that dependency entirely.
+
+**MIT License**
+
+This modified version is distributed under the MIT license. See the LICENSE file for details.
