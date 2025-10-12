@@ -1,5 +1,5 @@
-import type { WebContainer } from '@webcontainer/api';
 import { atom } from 'nanostores';
+import { dockerRuntime } from '~/lib/runtime/docker-runtime';
 
 // Extend Window interface to include our custom property
 declare global {
@@ -19,18 +19,19 @@ const PREVIEW_CHANNEL = 'preview-updates';
 
 export class PreviewsStore {
   #availablePreviews = new Map<number, PreviewInfo>();
-  #webcontainer: Promise<WebContainer>;
+  #sessionId: string;
   #broadcastChannel: BroadcastChannel;
   #lastUpdate = new Map<string, number>();
   #watchedFiles = new Set<string>();
   #refreshTimeouts = new Map<string, NodeJS.Timeout>();
   #REFRESH_DELAY = 300;
   #storageChannel: BroadcastChannel;
+  #pollInterval: NodeJS.Timeout | null = null;
 
   previews = atom<PreviewInfo[]>([]);
 
-  constructor(webcontainerPromise: Promise<WebContainer>) {
-    this.#webcontainer = webcontainerPromise;
+  constructor(sessionId: string) {
+    this.#sessionId = sessionId;
     this.#broadcastChannel = new BroadcastChannel(PREVIEW_CHANNEL);
     this.#storageChannel = new BroadcastChannel('storage-sync-channel');
 
@@ -140,7 +141,7 @@ export class PreviewsStore {
   }
 
   async #init() {
-    const webcontainer = await this.#webcontainer;
+    const webcontainer = await dockerRuntime;
 
     // Listen for server ready events
     webcontainer.on('server-ready', (port, url) => {
