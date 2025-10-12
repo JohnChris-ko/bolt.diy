@@ -870,16 +870,14 @@ export class FilesStore {
   }
 
   async deleteFile(filePath: string) {
-    const webcontainer = await dockerRuntime;
-
     try {
-      const relativePath = path.relative(webcontainer.workdir, filePath);
+      const relativePath = path.relative('/project', filePath);
 
       if (!relativePath) {
         throw new Error(`EINVAL: invalid file path, delete '${relativePath}'`);
       }
 
-      await webcontainer.fs.rm(relativePath);
+      await dockerRuntime.removeFile(this.#sessionId, filePath, false);
 
       this.#deletedPaths.add(filePath);
 
