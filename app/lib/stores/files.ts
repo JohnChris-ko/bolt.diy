@@ -900,16 +900,14 @@ export class FilesStore {
   }
 
   async deleteFolder(folderPath: string) {
-    const webcontainer = await dockerRuntime;
-
     try {
-      const relativePath = path.relative(webcontainer.workdir, folderPath);
+      const relativePath = path.relative('/project', folderPath);
 
       if (!relativePath) {
         throw new Error(`EINVAL: invalid folder path, delete '${relativePath}'`);
       }
 
-      await webcontainer.fs.rm(relativePath, { recursive: true });
+      await dockerRuntime.removeFile(this.#sessionId, folderPath, true);
 
       this.#deletedPaths.add(folderPath);
 
