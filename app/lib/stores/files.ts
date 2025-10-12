@@ -798,10 +798,8 @@ export class FilesStore {
   }
 
   async createFile(filePath: string, content: string | Uint8Array = '') {
-    const webcontainer = await dockerRuntime;
-
     try {
-      const relativePath = path.relative(webcontainer.workdir, filePath);
+      const relativePath = path.relative('/project', filePath);
 
       if (!relativePath) {
         throw new Error(`EINVAL: invalid file path, create '${relativePath}'`);
@@ -810,15 +808,15 @@ export class FilesStore {
       const dirPath = path.dirname(relativePath);
 
       if (dirPath !== '.') {
-        await webcontainer.fs.mkdir(dirPath, { recursive: true });
+        await dockerRuntime.mkdir(this.#sessionId, `${WORK_DIR}/${dirPath}`, true);
       }
 
       const isBinary = content instanceof Uint8Array;
 
       if (isBinary) {
-        await webcontainer.fs.writeFile(relativePath, Buffer.from(content));
-
         const base64Content = Buffer.from(content).toString('base64');
+        await dockerRuntime.writeFile(this.#sessionId, filePath, base64Content);
+
         this.files.setKey(filePath, {
           type: 'file',
           content: base64Content,
@@ -829,7 +827,7 @@ export class FilesStore {
         this.#modifiedFiles.set(filePath, base64Content);
       } else {
         const contentToWrite = (content as string).length === 0 ? ' ' : content;
-        await webcontainer.fs.writeFile(relativePath, contentToWrite);
+        await dockerRuntime.writeFile(this.#sessionId, filePath, contentToWrite);
 
         this.files.setKey(filePath, {
           type: 'file',
