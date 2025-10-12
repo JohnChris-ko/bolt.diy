@@ -187,7 +187,8 @@ export class PreviewsStore {
 
   // Helper to extract preview ID from URL
   getPreviewId(url: string): string | null {
-    const match = url.match(/^https?:\/\/([^.]+)\.local-credentialless\.webcontainer-api\.io/);
+    // New format: http://localhost:4000/preview/{sessionId}/{port}
+    const match = url.match(/\/preview\/[^\/]+\/(\d+)/);
     return match ? match[1] : null;
   }
 
