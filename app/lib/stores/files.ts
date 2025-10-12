@@ -589,20 +589,51 @@ export class FilesStore {
   }
 
   async #init() {
-    const webcontainer = await dockerRuntime;
-
     // Clean up any files that were previously deleted
     this.#cleanupDeletedFiles();
 
-    // Set up file watcher
-    webcontainer.internal.watchPaths(
-      {
-        include: [`${WORK_DIR}/**`],
-        exclude: ['**/node_modules', '.git', '**/package-lock.json'],
-        includeContent: true,
-      },
-      bufferWatchEvents(100, this.#processEventBuffer.bind(this)),
-    );
+    // Set up polling for file changes (replacing WebContainer's watchPaths)
+    setInterval(async () => {
+      try {
+        const entries = await dockerRuntime.readdir(this.#sessionId, WORK_DIR);
+        
+        // Compare entries with current files and update if changes detected
+        const currentFiles = this.files.get();
+        const updates: FileMap = {};
+        let hasChanges = false;
+
+        for (const entry of entries) {
+          const fullPath = `${WORK_DIR}/${entry.name}`;
+          const currentEntry = currentFiles[fullPath];
+
+          if (!currentEntry || currentEntry.type !== entry.type) {
+            hasChanges = true;
+            
+            if (entry.type === 'directory') {
+              updates[fullPath] = { type: 'folder' };
+            } else if (entry.type === 'file') {
+              // Read file content
+              try {
+                const content = await dockerRuntime.readFile(this.#sessionId, fullPath);
+                updates[fullPath] = {
+                  type: 'file',
+                  content,
+                  isBinary: false,
+                };
+              } catch (error) {
+                logger.error(`Failed to read file ${fullPath}:`, error);
+              }
+            }
+          }
+        }
+
+        if (hasChanges) {
+          this.files.set({ ...currentFiles, ...updates });
+        }
+      } catch (error) {
+        logger.error('File watch polling failed', error);
+      }
+    }, 2000);
 
     // Get the current chat ID
     const currentChatId = getCurrentChatId();
