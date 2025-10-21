@@ -304,8 +304,9 @@ export class ActionRunner {
       unreachable('Expected file action');
     }
 
-    const webcontainer = await this.#webcontainer;
-    const relativePath = nodePath.relative(webcontainer.workdir, action.filePath);
+    // Docker containers use /app as working directory
+    const workdir = '/app';
+    const relativePath = nodePath.relative(workdir, action.filePath);
 
     let folder = nodePath.dirname(relativePath);
 
@@ -314,7 +315,7 @@ export class ActionRunner {
 
     if (folder !== '.') {
       try {
-        await webcontainer.fs.mkdir(folder, { recursive: true });
+        await dockerRuntime.mkdir(this.#sessionId, nodePath.join(workdir, folder), true);
         logger.debug('Created folder', folder);
       } catch (error) {
         logger.error('Failed to create folder\n\n', error);
@@ -322,7 +323,7 @@ export class ActionRunner {
     }
 
     try {
-      await webcontainer.fs.writeFile(relativePath, action.content);
+      await dockerRuntime.writeFile(this.#sessionId, action.filePath, action.content);
       logger.debug(`File written ${relativePath}`);
     } catch (error) {
       logger.error('Failed to write file\n\n', error);
@@ -337,9 +338,8 @@ export class ActionRunner {
 
   async getFileHistory(filePath: string): Promise<FileHistory | null> {
     try {
-      const webcontainer = await this.#webcontainer;
       const historyPath = this.#getHistoryPath(filePath);
-      const content = await webcontainer.fs.readFile(historyPath, 'utf-8');
+      const content = await dockerRuntime.readFile(this.#sessionId, historyPath);
 
       return JSON.parse(content);
     } catch (error) {
