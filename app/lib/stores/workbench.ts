@@ -540,13 +540,15 @@ export class WorkbenchStore {
       this.artifactIdList.push(messageId);
     }
 
+    this.#ensureInitialized();
+
     this.artifacts.setKey(messageId, {
       id,
       title,
       closed: false,
       type,
       runner: new ActionRunner(
-        dockerRuntime,
+        this.#sessionId!,
         () => this.boltTerminal,
         (alert) => {
           if (this.#reloadedMessages.has(messageId)) {
@@ -622,8 +624,8 @@ export class WorkbenchStore {
     }
 
     if (data.action.type === 'file') {
-      const wc = await dockerRuntime;
-      const fullPath = path.join(wc.workdir, data.action.filePath);
+      // Construct full path (Docker containers use /app as working directory)
+      const fullPath = path.join('/app', data.action.filePath);
 
       /*
        * For scoped locks, we would need to implement diff checking here
