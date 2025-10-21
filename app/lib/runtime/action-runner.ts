@@ -1,4 +1,4 @@
-import type { WebContainer } from '@webcontainer/api';
+import { dockerRuntime } from '~/lib/runtime/docker-runtime';
 import { path as nodePath } from '~/utils/path';
 import { atom, map, type MapStore } from 'nanostores';
 import type { ActionAlert, BoltAction, DeployAlert, FileHistory, SupabaseAction, SupabaseAlert } from '~/types/actions';
@@ -64,7 +64,7 @@ class ActionCommandError extends Error {
 }
 
 export class ActionRunner {
-  #webcontainer: Promise<WebContainer>;
+  #sessionId: string;
   #currentExecutionPromise: Promise<void> = Promise.resolve();
   #shellTerminal: () => BoltShell;
   runnerId = atom<string>(`${Date.now()}`);
@@ -75,13 +75,13 @@ export class ActionRunner {
   buildOutput?: { path: string; exitCode: number; output: string };
 
   constructor(
-    webcontainerPromise: Promise<WebContainer>,
+    sessionId: string,
     getShellTerminal: () => BoltShell,
     onAlert?: (alert: ActionAlert) => void,
     onSupabaseAlert?: (alert: SupabaseAlert) => void,
     onDeployAlert?: (alert: DeployAlert) => void,
   ) {
-    this.#webcontainer = webcontainerPromise;
+    this.#sessionId = sessionId;
     this.#shellTerminal = getShellTerminal;
     this.onAlert = onAlert;
     this.onSupabaseAlert = onSupabaseAlert;
@@ -304,8 +304,9 @@ export class ActionRunner {
       unreachable('Expected file action');
     }
 
-    const webcontainer = await this.#webcontainer;
-    const relativePath = nodePath.relative(webcontainer.workdir, action.filePath);
+    // Docker containers use /app as working directory
+    const workdir = '/app';
+    const relativePath = nodePath.relative(workdir, action.filePath);
 
     let folder = nodePath.dirname(relativePath);
 
@@ -314,7 +315,7 @@ export class ActionRunner {
 
     if (folder !== '.') {
       try {
-        await webcontainer.fs.mkdir(folder, { recursive: true });
+        await dockerRuntime.mkdir(this.#sessionId, nodePath.join(workdir, folder), true);
         logger.debug('Created folder', folder);
       } catch (error) {
         logger.error('Failed to create folder\n\n', error);
@@ -322,7 +323,7 @@ export class ActionRunner {
     }
 
     try {
-      await webcontainer.fs.writeFile(relativePath, action.content);
+      await dockerRuntime.writeFile(this.#sessionId, action.filePath, action.content);
       logger.debug(`File written ${relativePath}`);
     } catch (error) {
       logger.error('Failed to write file\n\n', error);
@@ -337,9 +338,8 @@ export class ActionRunner {
 
   async getFileHistory(filePath: string): Promise<FileHistory | null> {
     try {
-      const webcontainer = await this.#webcontainer;
       const historyPath = this.#getHistoryPath(filePath);
-      const content = await webcontainer.fs.readFile(historyPath, 'utf-8');
+      const content = await dockerRuntime.readFile(this.#sessionId, historyPath);
 
       return JSON.parse(content);
     } catch (error) {
@@ -380,77 +380,86 @@ export class ActionRunner {
       source: 'netlify',
     });
 
-    const webcontainer = await this.#webcontainer;
+    // Execute build command via Docker runtime
+    try {
+      const result = await dockerRuntime.execCommand(this.#sessionId, 'npm run build', { cwd: '/app' });
 
-    // Create a new terminal specifically for the build
-    const buildProcess = await webcontainer.spawn('npm', ['run', 'build']);
+      if (result.exitCode !== 0) {
+        // Trigger build failed alert
+        this.onDeployAlert?.({
+          type: 'error',
+          title: 'Build Failed',
+          description: 'Your application build failed',
+          content: result.stderr || result.stdout || 'No build output available',
+          stage: 'building',
+          buildStatus: 'failed',
+          deployStatus: 'pending',
+          source: 'netlify',
+        });
 
-    let output = '';
-    buildProcess.output.pipeTo(
-      new WritableStream({
-        write(data) {
-          output += data;
-        },
-      }),
-    );
+        throw new ActionCommandError('Build Failed', result.stderr || result.stdout || 'No Output Available');
+      }
 
-    const exitCode = await buildProcess.exit;
+      // Trigger build success alert
+      this.onDeployAlert?.({
+        type: 'success',
+        title: 'Build Completed',
+        description: 'Your application was built successfully',
+        stage: 'deploying',
+        buildStatus: 'complete',
+        deployStatus: 'running',
+        source: 'netlify',
+      });
 
-    if (exitCode !== 0) {
-      // Trigger build failed alert
+      // Check for common build directories
+      const commonBuildDirs = ['dist', 'build', 'out', 'output', '.next', 'public'];
+
+      let buildDir = '';
+
+      // Try to find the first existing build directory
+      for (const dir of commonBuildDirs) {
+        const dirPath = nodePath.join('/app', dir);
+
+        try {
+          await dockerRuntime.readdir(this.#sessionId, dirPath);
+          buildDir = dirPath;
+          break;
+        } catch {
+          continue;
+        }
+      }
+
+      // If no build directory was found, use the default (dist)
+      if (!buildDir) {
+        buildDir = nodePath.join('/app', 'dist');
+      }
+
+      return {
+        path: buildDir,
+        exitCode: result.exitCode,
+        output: result.stdout || '',
+      };
+    } catch (error) {
+      // If it's already an ActionCommandError, re-throw it
+      if (error instanceof ActionCommandError) {
+        throw error;
+      }
+
+      // Otherwise, wrap it
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       this.onDeployAlert?.({
         type: 'error',
         title: 'Build Failed',
-        description: 'Your application build failed',
-        content: output || 'No build output available',
+        description: 'Failed to execute build command',
+        content: errorMessage,
         stage: 'building',
         buildStatus: 'failed',
         deployStatus: 'pending',
         source: 'netlify',
       });
 
-      throw new ActionCommandError('Build Failed', output || 'No Output Available');
+      throw new ActionCommandError('Build Failed', errorMessage);
     }
-
-    // Trigger build success alert
-    this.onDeployAlert?.({
-      type: 'success',
-      title: 'Build Completed',
-      description: 'Your application was built successfully',
-      stage: 'deploying',
-      buildStatus: 'complete',
-      deployStatus: 'running',
-      source: 'netlify',
-    });
-
-    // Check for common build directories
-    const commonBuildDirs = ['dist', 'build', 'out', 'output', '.next', 'public'];
-
-    let buildDir = '';
-
-    // Try to find the first existing build directory
-    for (const dir of commonBuildDirs) {
-      const dirPath = nodePath.join(webcontainer.workdir, dir);
-
-      try {
-        await webcontainer.fs.readdir(dirPath);
-        buildDir = dirPath;
-        break;
-      } catch {
-        continue;
-      }
-    }
-
-    // If no build directory was found, use the default (dist)
-    if (!buildDir) {
-      buildDir = nodePath.join(webcontainer.workdir, 'dist');
-    }
-
-    return {
-      path: buildDir,
-      exitCode,
-      output,
-    };
   }
   async handleSupabaseAction(action: SupabaseAction) {
     const { operation, content, filePath } = action;

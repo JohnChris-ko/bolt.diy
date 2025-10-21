@@ -2,7 +2,7 @@ import { atom, map, type MapStore, type ReadableAtom, type WritableAtom } from '
 import type { EditorDocument, ScrollPosition } from '~/components/editor/codemirror/CodeMirrorEditor';
 import { ActionRunner } from '~/lib/runtime/action-runner';
 import type { ActionCallbackData, ArtifactCallbackData } from '~/lib/runtime/message-parser';
-import { webcontainer } from '~/lib/webcontainer';
+import { dockerRuntime } from '~/lib/runtime/docker-runtime';
 import type { ITerminal } from '~/types/terminal';
 import { unreachable } from '~/utils/unreachable';
 import { EditorStore } from './editor';
@@ -36,10 +36,14 @@ type Artifacts = MapStore<Record<string, ArtifactState>>;
 export type WorkbenchViewType = 'code' | 'diff' | 'preview';
 
 export class WorkbenchStore {
-  #previewsStore = new PreviewsStore(webcontainer);
-  #filesStore = new FilesStore(webcontainer);
-  #editorStore = new EditorStore(this.#filesStore);
-  #terminalStore = new TerminalStore(webcontainer);
+  #sessionId: string | null = null;
+  #sessionInitialized: boolean = false;
+  #initializationPromise: Promise<void> | null = null;
+  
+  #previewsStore: PreviewsStore | null = null;
+  #filesStore: FilesStore | null = null;
+  #editorStore: EditorStore | null = null;
+  #terminalStore: TerminalStore | null = null;
 
   #reloadedMessages = new Set<string>();
 
@@ -68,14 +72,72 @@ export class WorkbenchStore {
       import.meta.hot.data.deployAlert = this.deployAlert;
 
       // Ensure binary files are properly preserved across hot reloads
-      const filesMap = this.files.get();
+      if (this.#filesStore) {
+        const filesMap = this.files.get();
 
-      for (const [path, dirent] of Object.entries(filesMap)) {
-        if (dirent?.type === 'file' && dirent.isBinary && dirent.content) {
-          // Make sure binary content is preserved
-          this.files.setKey(path, { ...dirent });
+        for (const [path, dirent] of Object.entries(filesMap)) {
+          if (dirent?.type === 'file' && dirent.isBinary && dirent.content) {
+            // Make sure binary content is preserved
+            this.files.setKey(path, { ...dirent });
+          }
         }
       }
+    }
+  }
+
+  /**
+   * Initialize the workbench with a Docker session
+   * Must be called before using the workbench
+   */
+  async initialize(projectId?: string): Promise<void> {
+    if (this.#sessionInitialized) {
+      return;
+    }
+
+    if (this.#initializationPromise) {
+      return this.#initializationPromise;
+    }
+
+    this.#initializationPromise = this.#doInitialize(projectId);
+    return this.#initializationPromise;
+  }
+
+  async #doInitialize(projectId?: string): Promise<void> {
+    try {
+      // Generate projectId if not provided
+      const pid = projectId || `project-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+      console.log('[Workbench] Creating Docker session for project:', pid);
+
+      // Create Docker session
+      const session = await dockerRuntime.createSession(pid);
+      this.#sessionId = session.sessionId;
+
+      console.log('[Workbench] Session created:', this.#sessionId);
+
+      // Initialize stores with sessionId
+      this.#previewsStore = new PreviewsStore(this.#sessionId);
+      this.#filesStore = new FilesStore(this.#sessionId);
+      this.#editorStore = new EditorStore(this.#filesStore);
+      this.#terminalStore = new TerminalStore(this.#sessionId);
+
+      this.#sessionInitialized = true;
+
+      console.log('[Workbench] Initialization complete');
+    } catch (error) {
+      console.error('[Workbench] Failed to initialize session:', error);
+      throw new Error(
+        'Failed to initialize workspace. Please ensure Docker is running and the backend server is accessible on port 4000.'
+      );
+    }
+  }
+
+  /**
+   * Ensure the workbench is initialized before accessing stores
+   */
+  #ensureInitialized(): void {
+    if (!this.#sessionInitialized || !this.#sessionId) {
+      throw new Error('Workbench not initialized. Call initialize() first.');
     }
   }
 
@@ -84,19 +146,21 @@ export class WorkbenchStore {
   }
 
   get previews() {
-    return this.#previewsStore.previews;
+    this.#ensureInitialized();
+    return this.#previewsStore!.previews;
   }
 
   get files() {
-    return this.#filesStore.files;
+    this.#ensureInitialized();
+    return this.#filesStore!.files;
   }
 
   get currentDocument(): ReadableAtom<EditorDocument | undefined> {
-    return this.#editorStore.currentDocument;
+    return this.#editorStore!.currentDocument;
   }
 
   get selectedFile(): ReadableAtom<string | undefined> {
-    return this.#editorStore.selectedFile;
+    return this.#editorStore!.selectedFile;
   }
 
   get firstArtifact(): ArtifactState | undefined {
@@ -104,14 +168,14 @@ export class WorkbenchStore {
   }
 
   get filesCount(): number {
-    return this.#filesStore.filesCount;
+    return this.#filesStore!.filesCount;
   }
 
   get showTerminal() {
-    return this.#terminalStore.showTerminal;
+    return this.#terminalStore!.showTerminal;
   }
   get boltTerminal() {
-    return this.#terminalStore.boltTerminal;
+    return this.#terminalStore!.boltTerminal;
   }
   get alert() {
     return this.actionAlert;
@@ -137,28 +201,28 @@ export class WorkbenchStore {
   }
 
   toggleTerminal(value?: boolean) {
-    this.#terminalStore.toggleTerminal(value);
+    this.#terminalStore!.toggleTerminal(value);
   }
 
   attachTerminal(terminal: ITerminal) {
-    this.#terminalStore.attachTerminal(terminal);
+    this.#terminalStore!.attachTerminal(terminal);
   }
   attachBoltTerminal(terminal: ITerminal) {
-    this.#terminalStore.attachBoltTerminal(terminal);
+    this.#terminalStore!.attachBoltTerminal(terminal);
   }
 
   detachTerminal(terminal: ITerminal) {
-    this.#terminalStore.detachTerminal(terminal);
+    this.#terminalStore!.detachTerminal(terminal);
   }
 
   onTerminalResize(cols: number, rows: number) {
-    this.#terminalStore.onTerminalResize(cols, rows);
+    this.#terminalStore!.onTerminalResize(cols, rows);
   }
 
   setDocuments(files: FileMap) {
-    this.#editorStore.setDocuments(files);
+    this.#editorStore!.setDocuments(files);
 
-    if (this.#filesStore.filesCount > 0 && this.currentDocument.get() === undefined) {
+    if (this.#filesStore!.filesCount > 0 && this.currentDocument.get() === undefined) {
       // we find the first file and select it
       for (const [filePath, dirent] of Object.entries(files)) {
         if (dirent?.type === 'file') {
@@ -180,10 +244,10 @@ export class WorkbenchStore {
       return;
     }
 
-    const originalContent = this.#filesStore.getFile(filePath)?.content;
+    const originalContent = this.#filesStore!.getFile(filePath)?.content;
     const unsavedChanges = originalContent !== undefined && originalContent !== newContent;
 
-    this.#editorStore.updateFile(filePath, newContent);
+    this.#editorStore!.updateFile(filePath, newContent);
 
     const currentDocument = this.currentDocument.get();
 
@@ -215,15 +279,15 @@ export class WorkbenchStore {
 
     const { filePath } = editorDocument;
 
-    this.#editorStore.updateScrollPosition(filePath, position);
+    this.#editorStore!.updateScrollPosition(filePath, position);
   }
 
   setSelectedFile(filePath: string | undefined) {
-    this.#editorStore.setSelectedFile(filePath);
+    this.#editorStore!.setSelectedFile(filePath);
   }
 
   async saveFile(filePath: string) {
-    const documents = this.#editorStore.documents.get();
+    const documents = this.#editorStore!.documents.get();
     const document = documents[filePath];
 
     if (document === undefined) {
@@ -236,7 +300,7 @@ export class WorkbenchStore {
      * This is a more complex feature that would be implemented in a future update
      */
 
-    await this.#filesStore.saveFile(filePath, document.value);
+    await this.#filesStore!.saveFile(filePath, document.value);
 
     const newUnsavedFiles = new Set(this.unsavedFiles.get());
     newUnsavedFiles.delete(filePath);
@@ -262,7 +326,7 @@ export class WorkbenchStore {
     }
 
     const { filePath } = currentDocument;
-    const file = this.#filesStore.getFile(filePath);
+    const file = this.#filesStore!.getFile(filePath);
 
     if (!file) {
       return;
@@ -278,15 +342,15 @@ export class WorkbenchStore {
   }
 
   getFileModifcations() {
-    return this.#filesStore.getFileModifications();
+    return this.#filesStore!.getFileModifications();
   }
 
   getModifiedFiles() {
-    return this.#filesStore.getModifiedFiles();
+    return this.#filesStore!.getModifiedFiles();
   }
 
   resetAllFileModifications() {
-    this.#filesStore.resetFileModifications();
+    this.#filesStore!.resetFileModifications();
   }
 
   /**
@@ -295,7 +359,7 @@ export class WorkbenchStore {
    * @returns True if the file was successfully locked
    */
   lockFile(filePath: string) {
-    return this.#filesStore.lockFile(filePath);
+    return this.#filesStore!.lockFile(filePath);
   }
 
   /**
@@ -304,7 +368,7 @@ export class WorkbenchStore {
    * @returns True if the folder was successfully locked
    */
   lockFolder(folderPath: string) {
-    return this.#filesStore.lockFolder(folderPath);
+    return this.#filesStore!.lockFolder(folderPath);
   }
 
   /**
@@ -313,7 +377,7 @@ export class WorkbenchStore {
    * @returns True if the file was successfully unlocked
    */
   unlockFile(filePath: string) {
-    return this.#filesStore.unlockFile(filePath);
+    return this.#filesStore!.unlockFile(filePath);
   }
 
   /**
@@ -322,7 +386,7 @@ export class WorkbenchStore {
    * @returns True if the folder was successfully unlocked
    */
   unlockFolder(folderPath: string) {
-    return this.#filesStore.unlockFolder(folderPath);
+    return this.#filesStore!.unlockFolder(folderPath);
   }
 
   /**
@@ -331,7 +395,7 @@ export class WorkbenchStore {
    * @returns Object with locked status, lock mode, and what caused the lock
    */
   isFileLocked(filePath: string) {
-    return this.#filesStore.isFileLocked(filePath);
+    return this.#filesStore!.isFileLocked(filePath);
   }
 
   /**
@@ -340,12 +404,12 @@ export class WorkbenchStore {
    * @returns Object with locked status, lock mode, and what caused the lock
    */
   isFolderLocked(folderPath: string) {
-    return this.#filesStore.isFolderLocked(folderPath);
+    return this.#filesStore!.isFolderLocked(folderPath);
   }
 
   async createFile(filePath: string, content: string | Uint8Array = '') {
     try {
-      const success = await this.#filesStore.createFile(filePath, content);
+      const success = await this.#filesStore!.createFile(filePath, content);
 
       if (success) {
         this.setSelectedFile(filePath);
@@ -370,7 +434,7 @@ export class WorkbenchStore {
 
   async createFolder(folderPath: string) {
     try {
-      return await this.#filesStore.createFolder(folderPath);
+      return await this.#filesStore!.createFolder(folderPath);
     } catch (error) {
       console.error('Failed to create folder:', error);
       throw error;
@@ -382,7 +446,7 @@ export class WorkbenchStore {
       const currentDocument = this.currentDocument.get();
       const isCurrentFile = currentDocument?.filePath === filePath;
 
-      const success = await this.#filesStore.deleteFile(filePath);
+      const success = await this.#filesStore!.deleteFile(filePath);
 
       if (success) {
         const newUnsavedFiles = new Set(this.unsavedFiles.get());
@@ -419,7 +483,7 @@ export class WorkbenchStore {
       const currentDocument = this.currentDocument.get();
       const isInCurrentFolder = currentDocument?.filePath?.startsWith(folderPath + '/');
 
-      const success = await this.#filesStore.deleteFolder(folderPath);
+      const success = await this.#filesStore!.deleteFolder(folderPath);
 
       if (success) {
         const unsavedFiles = this.unsavedFiles.get();
@@ -476,13 +540,15 @@ export class WorkbenchStore {
       this.artifactIdList.push(messageId);
     }
 
+    this.#ensureInitialized();
+
     this.artifacts.setKey(messageId, {
       id,
       title,
       closed: false,
       type,
       runner: new ActionRunner(
-        webcontainer,
+        this.#sessionId!,
         () => this.boltTerminal,
         (alert) => {
           if (this.#reloadedMessages.has(messageId)) {
@@ -558,8 +624,8 @@ export class WorkbenchStore {
     }
 
     if (data.action.type === 'file') {
-      const wc = await webcontainer;
-      const fullPath = path.join(wc.workdir, data.action.filePath);
+      // Construct full path (Docker containers use /app as working directory)
+      const fullPath = path.join('/app', data.action.filePath);
 
       /*
        * For scoped locks, we would need to implement diff checking here
@@ -575,13 +641,13 @@ export class WorkbenchStore {
         this.currentView.set('code');
       }
 
-      const doc = this.#editorStore.documents.get()[fullPath];
+      const doc = this.#editorStore!.documents.get()[fullPath];
 
       if (!doc) {
         await artifact.runner.runAction(data, isStreaming);
       }
 
-      this.#editorStore.updateFile(fullPath, data.action.content);
+      this.#editorStore!.updateFile(fullPath, data.action.content);
 
       if (!isStreaming && data.action.content) {
         await this.saveFile(fullPath);

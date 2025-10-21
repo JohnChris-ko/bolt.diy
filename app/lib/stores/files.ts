@@ -1,26 +1,10 @@
-import type { PathWatcherEvent } from '@webcontainer/api';
-import { getEncoding } from 'istextorbinary';
 import { map, type MapStore } from 'nanostores';
-import { Buffer } from 'node:buffer';
-import { path } from '~/utils/path';
-import { bufferWatchEvents } from '~/utils/buffer';
-import { WORK_DIR } from '~/utils/constants';
-import { computeFileModifications } from '~/utils/diff';
+import { Subject } from 'rxjs';
+import type { FileMap, FilesStore as IFilesStore } from '~/types/stores';
+import { bufferTime, delayWhen, filter, map as map$ } from 'rxjs/operators';
 import { createScopedLogger } from '~/utils/logger';
-import { unreachable } from '~/utils/unreachable';
-import {
-  addLockedFile,
-  removeLockedFile,
-  addLockedFolder,
-  removeLockedFolder,
-  getLockedItemsForChat,
-  getLockedFilesForChat,
-  getLockedFoldersForChat,
-  isPathInLockedFolder,
-  migrateLegacyLocks,
-  clearCache,
-} from '~/lib/persistence/lockedFiles';
-import { getCurrentChatId } from '~/utils/fileLocks';
+import type { EditorDocument } from '~/components/editor/codemirror/CodeMirrorEditor';
+import { WORK_DIR_NAME, WORK_DIR } from '~/utils/constants';
 import { dockerRuntime } from '~/lib/runtime/docker-runtime';
 
 const logger = createScopedLogger('FilesStore');
