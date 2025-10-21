@@ -1,4 +1,4 @@
-import type { WebContainer } from '@webcontainer/api';
+import { dockerRuntime } from '~/lib/runtime/docker-runtime';
 import { path as nodePath } from '~/utils/path';
 import { atom, map, type MapStore } from 'nanostores';
 import type { ActionAlert, BoltAction, DeployAlert, FileHistory, SupabaseAction, SupabaseAlert } from '~/types/actions';
@@ -64,7 +64,7 @@ class ActionCommandError extends Error {
 }
 
 export class ActionRunner {
-  #webcontainer: Promise<WebContainer>;
+  #sessionId: string;
   #currentExecutionPromise: Promise<void> = Promise.resolve();
   #shellTerminal: () => BoltShell;
   runnerId = atom<string>(`${Date.now()}`);
@@ -75,13 +75,13 @@ export class ActionRunner {
   buildOutput?: { path: string; exitCode: number; output: string };
 
   constructor(
-    webcontainerPromise: Promise<WebContainer>,
+    sessionId: string,
     getShellTerminal: () => BoltShell,
     onAlert?: (alert: ActionAlert) => void,
     onSupabaseAlert?: (alert: SupabaseAlert) => void,
     onDeployAlert?: (alert: DeployAlert) => void,
   ) {
-    this.#webcontainer = webcontainerPromise;
+    this.#sessionId = sessionId;
     this.#shellTerminal = getShellTerminal;
     this.onAlert = onAlert;
     this.onSupabaseAlert = onSupabaseAlert;
